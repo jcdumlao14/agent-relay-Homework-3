@@ -285,46 +285,35 @@ git push origin main
 
 Repository: `https://github.com/jcdumlao14/agent-relay-Homework-3`
 
-## VS Code Automation Script
-
-`update-agent-relay-vscode-auto-replace.ps1` automatically backs up the existing README, replaces it with the clean Homework 3 README, validates it, runs tests, and commits and pushes the README when it changes.
-
-Run from the VS Code PowerShell terminal:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\update-agent-relay-vscode-auto-replace.ps1
-```
-
-The script creates `README.before-auto-replace.md` as a backup before replacing the README.
 
 ## Homework 3 Completion
 
-<span style="color:green">GREEN - Q1 Architecture - Complete</span>
+🟢 Q1 Architecture — Complete
 
-<span style="color:green">GREEN - Q2 Testing - Complete</span>
+🟢 Q2 Testing — Complete
 
-<span style="color:green">GREEN - Q3 Docker - Complete</span>
+🟢 Q3 Docker — Complete
 
-<span style="color:green">GREEN - Q4 PostgreSQL - Complete</span>
+🟢 Q4 PostgreSQL — Complete
 
-<span style="color:green">GREEN - Q5 Kubernetes - Complete</span>
+🟢 Q5 Kubernetes — Complete
 
-<span style="color:green">GREEN - Q6 CI/CD - Complete</span>
+🟢 Q6 CI/CD — Complete
 
-<span style="color:green">GREEN - Local Python tests passed</span>
+🟢 Local Python tests passed
 
-<span style="color:green">GREEN - Docker image built successfully</span>
+🟢 Docker image built successfully
 
-<span style="color:green">GREEN - PostgreSQL integration verified</span>
+🟢 PostgreSQL integration verified
 
-<span style="color:green">GREEN - Kubernetes resources validated</span>
+🟢 Kubernetes resources validated
 
-<span style="color:green">GREEN - /health verified</span>
+🟢 /health verified
 
-<span style="color:green">GREEN - /ready verified</span>
+🟢 /ready verified
 
-<span style="color:green">GREEN - GitHub Actions CI/CD passed</span>
+🟢 GitHub Actions CI/CD passed
+
 ## Final Verification
 
 ```powershell
