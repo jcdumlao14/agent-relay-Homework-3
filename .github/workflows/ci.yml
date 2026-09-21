@@ -1,0 +1,138 @@
+name: Agent Relay CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Python Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: agent_relay
+          POSTGRES_USER: agent_relay
+          POSTGRES_PASSWORD: agent_relay
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agent_relay -d agent_relay"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run tests
+        env:
+          RELAY_DATABASE_URL: postgresql+psycopg://agent_relay:agent_relay@127.0.0.1:5432/agent_relay
+        run: uv run pytest -v
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Agent Relay image
+        run: docker build -t agent-relay:q4 .
+
+      - name: Verify Docker image
+        run: docker image inspect agent-relay:q4
+
+  kubernetes:
+    name: Kubernetes Validation
+    runs-on: ubuntu-latest
+    needs: docker
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: agent-relay-ci
+
+      - name: Build Agent Relay image
+        run: docker build -t agent-relay:q4 .
+
+      - name: Load image into Kind
+        run: kind load docker-image agent-relay:q4 --name agent-relay-ci
+
+      - name: Verify Kubernetes manifests
+        run: kubectl apply --dry-run=client -f k8s/
+
+      - name: Create namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Deploy PostgreSQL
+        run: |
+          kubectl apply -f k8s/postgres-secret.yaml
+          kubectl apply -f k8s/postgres-pvc.yaml
+          kubectl apply -f k8s/postgres-deployment.yaml
+          kubectl apply -f k8s/postgres-service.yaml
+
+      - name: Deploy Agent Relay
+        run: |
+          kubectl apply -f k8s/agent-relay-deployment.yaml
+          kubectl apply -f k8s/agent-relay-service.yaml
+
+      - name: Wait for PostgreSQL
+        run: |
+          kubectl wait \
+            --namespace agent-relay \
+            --for=condition=available \
+            deployment/postgres \
+            --timeout=180s
+
+      - name: Wait for Agent Relay
+        run: |
+          kubectl wait \
+            --namespace agent-relay \
+            --for=condition=available \
+            deployment/agent-relay \
+            --timeout=180s
+
+      - name: Check Kubernetes resources
+        run: |
+          kubectl get pods -n agent-relay
+          kubectl get services -n agent-relay
+          kubectl get pvc -n agent-relay
+
+      - name: Check health and readiness
+        run: |
+          kubectl port-forward \
+            -n agent-relay \
+            service/agent-relay \
+            8000:8000 > /tmp/port-forward.log 2>&1 &
+
+          sleep 5
+
+          curl --fail http://127.0.0.1:8000/health
+          curl --fail http://127.0.0.1:8000/ready
