@@ -283,8 +283,11 @@ git log -1 --oneline
 git push origin main
 ```
 
-Repository: `https://github.com/jcdumlao14/agent-relay-Homework-3`
+## Repository:
 
+```
+https://github.com/jcdumlao14/agent-relay-Homework-3
+```
 
 ## Homework 3 Completion
 
