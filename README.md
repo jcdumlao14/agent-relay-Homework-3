@@ -325,7 +325,6 @@ The script creates `README.before-auto-replace.md` as a backup before replacing 
 <span style="color:green">GREEN - /ready verified</span>
 
 <span style="color:green">GREEN - GitHub Actions CI/CD passed</span>
-
 ## Final Verification
 
 ```powershell
