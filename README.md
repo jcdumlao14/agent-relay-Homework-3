@@ -1,19 +1,8 @@
-# Agent Relay Homework 3 - VS Code automation
-$ErrorActionPreference = "Stop"
-
-Write-Host "=== Agent Relay Homework 3 - VS Code Automation ===" -ForegroundColor Cyan
-$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location $ProjectRoot
-Write-Host "Project: $ProjectRoot" -ForegroundColor Gray
-
-if (-not (Test-Path ".git")) { throw "Place this script in C:\Users\kambar\agent-relay and run it from the repository root." }
-
-$Readme = @'
-# Agent Relay — Homework 3
+# Agent Relay - Homework 3
 
 ## Overview
 
-Agent Relay is a FastAPI-based task relay service for registering workers (agents), queuing tasks, leasing work to agents, tracking attempts, and recovering expired leases. Homework 3 extends the application into a containerized PostgreSQL-backed service with Kubernetes deployment and GitHub Actions CI/CD validation.
+Agent Relay is a FastAPI task relay service for registering worker agents, queuing tasks, leasing work, tracking attempts, and recovering expired leases. Homework 3 extends the application with PostgreSQL, Docker, Kubernetes, and GitHub Actions CI/CD.
 
 ## Homework 3 Questions
 
@@ -29,61 +18,57 @@ Agent Relay is a FastAPI-based task relay service for registering workers (agent
 ## Architecture
 
 ```text
-                         GitHub Actions
-                              |
-                    +---------+---------+
-                    |                   |
-                Python Tests       Docker Build
-                    |                   |
-                    +---------+---------+
-                              |
-                    Kubernetes Validation
-                              |
-                +-------------+-------------+
-                |                           |
-          Agent Relay API             PostgreSQL
-          FastAPI/Uvicorn              Database
-                |                           |
-                +-------------+-------------+
-                              |
-                         Worker Agents
+GitHub Actions
+      |
+      +-- Python Tests
+      |
+      +-- Docker Build
+      |
+      +-- Kubernetes Validation
+                |
+        +-------+-------+
+        |               |
+   Agent Relay      PostgreSQL
+   FastAPI API       Database
+        |
+    Worker Agents
 ```
 
-Agents interact with persistent task state through an HTTP API. PostgreSQL stores agents, tasks, and attempts when `DATABASE_URL` points to PostgreSQL.
+Agents interact with persistent task state through the HTTP API. PostgreSQL stores agents, tasks, and attempts when `DATABASE_URL` points to PostgreSQL.
 
 ## Complete Project Structure
 
 ```text
 agent-relay/
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-├── k8s/
-│   ├── namespace.yaml
-│   ├── postgres-secret.yaml
-│   ├── postgres-pvc.yaml
-│   ├── postgres-deployment.yaml
-│   ├── postgres-service.yaml
-│   ├── agent-relay-deployment.yaml
-│   └── agent-relay-service.yaml
-├── q2/
-├── .gitignore
-├── Dockerfile
-├── compose.yaml
-├── pyproject.toml
-├── uv.lock
-├── main.py
-├── database.py
-├── storage.py
-├── schemas.py
-├── errors.py
-├── worker.py
-├── dashboard.py
-├── dashboard.html
-├── test_agent_relay.py
-├── SPEC.md
-├── README.md
-└── update-agent-relay-vscode.ps1
+|-- .github/
+|   `-- workflows/
+|       `-- ci.yml
+|-- k8s/
+|   |-- namespace.yaml
+|   |-- postgres-secret.yaml
+|   |-- postgres-pvc.yaml
+|   |-- postgres-deployment.yaml
+|   |-- postgres-service.yaml
+|   |-- agent-relay-deployment.yaml
+|   `-- agent-relay-service.yaml
+|-- q2/
+|-- .gitignore
+|-- Dockerfile
+|-- compose.yaml
+|-- pyproject.toml
+|-- uv.lock
+|-- main.py
+|-- database.py
+|-- storage.py
+|-- schemas.py
+|-- errors.py
+|-- worker.py
+|-- dashboard.py
+|-- dashboard.html
+|-- test_agent_relay.py
+|-- SPEC.md
+|-- README.md
+`-- update-agent-relay-vscode-auto-replace.ps1
 ```
 
 ## Technology Stack
@@ -97,7 +82,7 @@ agent-relay/
 - Pydantic Settings
 - pytest
 - uv
-- Docker / Docker Compose
+- Docker and Docker Compose
 - Kubernetes
 - Kind
 - kubectl
@@ -107,7 +92,6 @@ agent-relay/
 
 ```powershell
 cd C:\Users\kambar\agent-relay
-code .
 uv sync
 uv run pytest -v
 ```
@@ -169,13 +153,7 @@ docker compose down
 
 ## Docker
 
-The expected Homework 3 image tag is:
-
-```text
-agent-relay:q4
-```
-
-Build and inspect:
+The expected Homework 3 image tag is `agent-relay:q4`.
 
 ```powershell
 docker build -t agent-relay:q4 .
@@ -184,9 +162,7 @@ docker image inspect agent-relay:q4
 
 ## Kubernetes
 
-The Kubernetes manifests are stored in `k8s/` and define the namespace, PostgreSQL resources, and Agent Relay resources.
-
-Reuse the existing Kind cluster rather than deleting/recreating it:
+The Kubernetes manifests are stored in `k8s/`. Reuse the existing Kind cluster. Do not delete or recreate the working cluster.
 
 ```powershell
 kubectl config current-context
@@ -232,7 +208,7 @@ kubectl wait --namespace agent-relay --for=condition=available deployment/postgr
 kubectl wait --namespace agent-relay --for=condition=available deployment/agent-relay --timeout=180s
 ```
 
-Forward and verify:
+Forward the API:
 
 ```powershell
 kubectl port-forward -n agent-relay service/agent-relay 8000:8000
@@ -247,43 +223,35 @@ curl.exe http://127.0.0.1:8000/ready
 
 ## CI/CD
 
-Workflow file:
+Workflow file: `.github/workflows/ci.yml`
 
-```text
-.github/workflows/ci.yml
-```
-
-The workflow runs for pushes to `main` and pull requests targeting `main`.
+The workflow runs on pushes to `main` and pull requests targeting `main`.
 
 ### Python Tests
 
 - Checkout repository
 - Install Python 3.11
-- Install `uv`
+- Install uv
 - Run `uv sync --frozen`
-- Start PostgreSQL 16 service container
+- Start PostgreSQL 16 as a service container
 - Set `DATABASE_URL`
 - Run `uv run pytest -v`
 
 ### Docker Build
 
-Builds and verifies:
-
-```text
-agent-relay:q4
-```
+Builds and verifies `agent-relay:q4`.
 
 ### Kubernetes Validation
 
-The workflow creates a temporary Kind cluster, builds and loads `agent-relay:q4`, validates manifests, deploys PostgreSQL and Agent Relay, waits for both deployments, checks resources, and verifies `/health` and `/ready`.
+Creates a temporary Kind cluster, builds and loads `agent-relay:q4`, validates the manifests, deploys PostgreSQL and Agent Relay, waits for both deployments, checks resources, and verifies `/health` and `/ready`.
 
-The jobs are ordered: Docker waits for tests, and Kubernetes waits for Docker.
+The jobs run in order: Docker waits for Python Tests, and Kubernetes waits for Docker Build.
 
 ## Environment Configuration
 
-The application database setting is `DATABASE_URL`.
+The application database configuration uses `DATABASE_URL`.
 
-Example PostgreSQL URL:
+Example PostgreSQL connection string:
 
 ```text
 postgresql+psycopg://agent_relay:agent_relay@127.0.0.1:5432/agent_relay
@@ -305,118 +273,58 @@ Run the main test file:
 uv run pytest test_agent_relay.py -v
 ```
 
-The test suite covers core service behavior including health checks, task/agent operations, and invalid status handling.
-
 ## Git Workflow
 
 ```powershell
 git status
 git diff
 git diff --check
+git log -1 --oneline
 git push origin main
 ```
 
-Repository:
+Repository: `https://github.com/jcdumlao14/agent-relay-Homework-3`
 
-```text
-https://github.com/jcdumlao14/agent-relay-Homework-3
-```
+## VS Code Automation Script
 
-## Automated VS Code Script
-
-`update-agent-relay-vscode.ps1` is a self-contained automation script. It writes the complete README, so an existing short README is automatically replaced instead of causing the previous validation error.
+`update-agent-relay-vscode-auto-replace.ps1` automatically backs up the existing README, replaces it with the clean Homework 3 README, validates it, runs tests, and commits and pushes the README when it changes.
 
 Run from the VS Code PowerShell terminal:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\update-agent-relay-vscode.ps1
+.\update-agent-relay-vscode-auto-replace.ps1
 ```
 
-The script:
+The script creates `README.before-auto-replace.md` as a backup before replacing the README.
 
-1. Confirms it is in the Git repository root.
-2. Checks the required project files.
-3. Checks the CI/CD configuration.
-4. Writes the complete README.
-5. Runs `git diff --check`.
-6. Runs `uv run pytest -v`.
-7. Stages `README.md`.
-8. Creates a Git commit if the README changed.
-9. Pushes the commit to `origin main`.
-10. Shows the final Git status and commit.
+## Homework 3 Completion
 
-## Troubleshooting
+<span style="color:green">GREEN - Q1 Architecture - Complete</span>
 
-### README is too short
+<span style="color:green">GREEN - Q2 Testing - Complete</span>
 
-The corrected script no longer depends on the old README length. It writes the full README before validation. Replace your old script with the corrected file and run it again.
+<span style="color:green">GREEN - Q3 Docker - Complete</span>
 
-### `uv` is not recognized
+<span style="color:green">GREEN - Q4 PostgreSQL - Complete</span>
 
-```powershell
-uv --version
-uv sync
-```
+<span style="color:green">GREEN - Q5 Kubernetes - Complete</span>
 
-Restart the VS Code terminal if necessary.
+<span style="color:green">GREEN - Q6 CI/CD - Complete</span>
 
-### Docker is not running
+<span style="color:green">GREEN - Local Python tests passed</span>
 
-Start Docker Desktop and check:
+<span style="color:green">GREEN - Docker image built successfully</span>
 
-```powershell
-docker version
-```
+<span style="color:green">GREEN - PostgreSQL integration verified</span>
 
-### Kubernetes context
+<span style="color:green">GREEN - Kubernetes resources validated</span>
 
-```powershell
-kubectl config current-context
-```
+<span style="color:green">GREEN - /health verified</span>
 
-Expected local Kind context:
+<span style="color:green">GREEN - /ready verified</span>
 
-```text
-kind-agent-relay
-```
-
-### Kubernetes pod troubleshooting
-
-```powershell
-kubectl get pods -n agent-relay
-kubectl describe pod -n agent-relay <pod-name>
-kubectl logs -n agent-relay deployment/agent-relay
-kubectl logs -n agent-relay deployment/postgres
-```
-
-## Homework 3 Completion Checklist
-
-🟢 Q1 Architecture — Complete
-
-🟢 Q2 Testing — Complete
-
-🟢 Q3 Docker — Complete
-
-🟢 Q4 PostgreSQL — Complete
-
-🟢 Q5 Kubernetes — Complete
-
-🟢 Q6 CI/CD — Complete
-
-🟢 Local Python tests passed
-
-🟢 Docker image built successfully
-
-🟢 PostgreSQL integration verified
-
-🟢 Kubernetes resources validated
-
-🟢 `/health` verified
-
-🟢 `/ready` verified
-
-🟢 GitHub Actions CI/CD passed
+<span style="color:green">GREEN - GitHub Actions CI/CD passed</span>
 
 ## Final Verification
 
@@ -427,74 +335,3 @@ git diff --check
 git status
 git log -1 --oneline
 ```
-
-The GitHub Actions workflow should then show successful Python Tests, Docker Build, and Kubernetes Validation jobs for the latest `main` commit.
-
-'@
-
-Write-Host "`n=== Check required project structure ===" -ForegroundColor Cyan
-$required = @(
-  ".github/workflows/ci.yml", "k8s/namespace.yaml", "k8s/postgres-secret.yaml",
-  "k8s/postgres-pvc.yaml", "k8s/postgres-deployment.yaml", "k8s/postgres-service.yaml",
-  "k8s/agent-relay-deployment.yaml", "k8s/agent-relay-service.yaml", "Dockerfile",
-  "compose.yaml", "pyproject.toml", "uv.lock", "main.py", "database.py", "storage.py",
-  "schemas.py", "errors.py", "worker.py", "dashboard.py", "dashboard.html",
-  "test_agent_relay.py", "SPEC.md"
-)
-$missing = @($required | Where-Object { -not (Test-Path $_) })
-if ($missing.Count -gt 0) { throw "Missing required file(s): $($missing -join ', ')" }
-Write-Host "All required project files found." -ForegroundColor Green
-
-Write-Host "`n=== Check CI/CD configuration ===" -ForegroundColor Cyan
-$ci = Get-Content ".github/workflows/ci.yml" -Raw
-$patterns = @(
-  "DATABASE_URL",
-  "docker build -t agent-relay:q4",
-  "kind load docker-image agent-relay:q4",
-  "kubectl wait",
-  "/health",
-  "/ready"
-)
-foreach ($pattern in $patterns) {
-  if ($ci -notmatch [regex]::Escape($pattern)) { throw "CI/CD configuration check failed: $pattern" }
-}
-Write-Host "CI/CD configuration checks passed." -ForegroundColor Green
-
-Write-Host "`n=== Write complete README ===" -ForegroundColor Cyan
-$readmePath = Join-Path $ProjectRoot "README.md"
-[System.IO.File]::WriteAllText($readmePath, $Readme, [System.Text.UTF8Encoding]::new($false))
-$size = (Get-Item $readmePath).Length
-Write-Host "README.md generated: $size bytes" -ForegroundColor Green
-if ($size -lt 5000) { throw "Generated README is unexpectedly short." }
-
-Write-Host "`n=== Validate Git whitespace ===" -ForegroundColor Cyan
-git diff --check
-if ($LASTEXITCODE -ne 0) { throw "git diff --check failed." }
-
-Write-Host "`n=== Run Python tests ===" -ForegroundColor Cyan
-uv run pytest -v
-if ($LASTEXITCODE -ne 0) { throw "Tests failed. Commit/push stopped." }
-
-Write-Host "`n=== Stage README ===" -ForegroundColor Cyan
-git add README.md
-if ($LASTEXITCODE -ne 0) { throw "git add failed." }
-git diff --cached --check
-if ($LASTEXITCODE -ne 0) { throw "Staged Git whitespace check failed." }
-
-$staged = @(git diff --cached --name-only)
-if ($staged -contains "README.md") {
-  Write-Host "`n=== Commit README ===" -ForegroundColor Cyan
-  git commit -m "Add complete Homework 3 README"
-  if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
-
-  Write-Host "`n=== Push to GitHub ===" -ForegroundColor Cyan
-  git push origin main
-  if ($LASTEXITCODE -ne 0) { throw "git push failed." }
-} else {
-  Write-Host "README has no changes to commit." -ForegroundColor Yellow
-}
-
-Write-Host "`n=== Final verification ===" -ForegroundColor Cyan
-git status --short --branch
-git log -1 --oneline
-Write-Host "`nDONE: README generated, project validated, tests passed, and GitHub updated when changes were present." -ForegroundColor Green
