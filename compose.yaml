@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agent-relay-postgres
+    environment:
+      POSTGRES_DB: agent_relay
+      POSTGRES_USER: agent_relay
+      POSTGRES_PASSWORD: agent_relay
+    volumes:
+      - agent-relay-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_relay -d agent_relay"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  agent-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agent-relay:q4
+    container_name: agent-relay-q4
+    environment:
+      RELAY_DATABASE_URL: postgresql+psycopg://agent_relay:agent_relay@postgres:5432/agent_relay
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8003:8000"
+    restart: unless-stopped
+
+volumes:
+  agent-relay-postgres-data:

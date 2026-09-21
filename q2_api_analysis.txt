@@ -1,0 +1,119 @@
+============================================================
+AGENT RELAY Q2 API ANALYSIS
+Generated: 09/20/2026 20:43:57
+============================================================
+
+================ ACCEPTANCE SCENARIOS ================
+## Acceptance scenarios
+
+1. Register two agents. One sends a task; the other claims and completes it; the sender reads the result.
+2. Register an agent without starting a worker. Its task remains queued until the worker starts with the saved credentials.
+3. Start three workers serving one agent and submit multiple tasks. Tasks are distributed with no overlapping active claims for the same task.
+4. Kill a worker after claiming. After lease expiry, another worker receives the task with a different claim token and incremented attempt number.
+5. Submit a result using the expired token. It is rejected, including before recovery has requeued the task.
+6. Heartbeat during a long task. Other workers cannot claim it while the renewed lease remains active.
+7. Repeat a task submission with the same idempotency key, and repeat a completion after simulating a lost response. Neither creates duplicate records or changes the accepted result.
+8. Exhaust the delivery attempt limit. The task becomes failed and no longer appears in claims.
+9. Try to read another pair of agents' task or claim another agent's inbox. Access is denied and no task content or credentials leak.
+10. Restart the relay with queued and processing tasks. Queued tasks remain available, and expired processing tasks recover from persisted leases.
+
+
+================ MAIN.PY ROUTES ================
+@app.get("/health")
+@app.get("/ready")
+@app.post("/api/v1/agents", status_code=201)
+@app.get("/api/v1/agents")
+@app.get("/api/v1/agents/me")
+@app.post("/api/v1/tasks", status_code=201)
+@app.post("/api/v1/tasks/claim")
+@app.post("/api/v1/tasks/{task_id}/heartbeat")
+@app.post("/api/v1/tasks/{task_id}/complete")
+@app.post("/api/v1/tasks/{task_id}/fail")
+@app.get("/api/v1/tasks/{task_id}")
+@app.get("/api/v1/tasks")
+@app.get("/api/v1/tasks/{task_id}/attempts")
+@app.get("/", response_class=HTMLResponse)
+@app.get("/dashboard", response_class=HTMLResponse)
+
+================ ALL ROUTES ================
+main.py: @app.get("/health")
+main.py: @app.get("/ready")
+main.py: @app.post("/api/v1/agents", status_code=201)
+main.py: @app.get("/api/v1/agents")
+main.py: @app.get("/api/v1/agents/me")
+main.py: @app.post("/api/v1/tasks", status_code=201)
+main.py: @app.post("/api/v1/tasks/claim")
+main.py: @app.post("/api/v1/tasks/{task_id}/heartbeat")
+main.py: @app.post("/api/v1/tasks/{task_id}/complete")
+main.py: @app.post("/api/v1/tasks/{task_id}/fail")
+main.py: @app.get("/api/v1/tasks/{task_id}")
+main.py: @app.get("/api/v1/tasks")
+main.py: @app.get("/api/v1/tasks/{task_id}/attempts")
+main.py: @app.get("/", response_class=HTMLResponse)
+main.py: @app.get("/dashboard", response_class=HTMLResponse)
+
+================ REQUEST/RESPONSE MODELS ================
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+class RegisterRequest(BaseModel):
+name: str = Field(min_length=1, max_length=100)
+description: str | None = Field(default=None, max_length=1000)
+class TaskCreateRequest(BaseModel):
+to: str = Field(min_length=1, max_length=100)
+input: str = Field(min_length=1)
+class ClaimRequest(BaseModel):
+worker_id: str | None = Field(default=None, max_length=100)
+wait_seconds: int = Field(default=30, ge=0, le=30)
+class ClaimTokenRequest(BaseModel):
+claim_token: str = Field(min_length=1, max_length=200)
+class CompleteRequest(ClaimTokenRequest):
+output: str = Field(default="")
+class FailRequest(ClaimTokenRequest):
+error: str = Field(min_length=1)
+
+================ AUTH / TOKEN REFERENCES ================
+main.py:38: ClaimTokenRequest,
+main.py:69: def bearer_value(authorization: str | None) -> str:
+main.py:70: if not authorization:
+main.py:71: raise RelayError("missing_credentials", "Authorization: Bearer <agent-token> is required.", 401)
+main.py:72: scheme, separator, value = authorization.partition(" ")
+main.py:73: if not separator or scheme.lower() != "bearer" or not value.strip():
+main.py:74: raise RelayError("invalid_credentials", "Use Authorization: Bearer <agent-token>.", 401)
+main.py:78: def current_agent(authorization: str | None = Header(default=None)):
+main.py:79: return authenticate(bearer_value(authorization))
+main.py:245: body: ClaimTokenRequest,
+main.py:249: return {"lease_expires_at": heartbeat(task_id, current.id, body.claim_token)}
+main.py:258: return commit_terminal(task_id, current.id, body.claim_token, action="complete", value=body.output)
+main.py:267: return commit_terminal(task_id, current.id, body.claim_token, action="fail", value=body.error)
+storage.py:46: return f"{prefix}_{secrets.token_urlsafe(32)}"
+storage.py:59: token = new_secret("agt")
+storage.py:67: token_hash=secret_hash(token),
+storage.py:72: return {"agent_id": agent_id, "token": token}
+storage.py:75: def authenticate(token: str) -> Agent:
+storage.py:76: token_digest = secret_hash(token)
+storage.py:81: agent = db.scalar(select(Agent).where(Agent.token_hash == token_digest))
+storage.py:82: if agent is None or not hmac.compare_digest(agent.token_hash, token_digest):
+storage.py:83: raise RelayError("invalid_credentials", "The agent token is invalid.", 401)
+storage.py:161: claim_token = new_secret("clm")
+storage.py:170: claim_token_hash=secret_hash(claim_token),
+storage.py:185: "claim_token": claim_token,
+storage.py:190: def _find_attempt_for_token(db: Session, task_id: str, token: str) -> Attempt | None:
+storage.py:192: select(Attempt).where(Attempt.task_id == task_id, Attempt.claim_token_hash == secret_hash(token))
+storage.py:196: def heartbeat(task_id: str, agent_id: str, claim_token: str) -> str:
+storage.py:201: attempt = _find_attempt_for_token(db, task_id, claim_token)
+storage.py:219: claim_token: str,
+storage.py:228: attempt = _find_attempt_for_token(db, task_id, claim_token)
+worker.py:57: token: str,
+worker.py:67: headers = {"Authorization": f"Bearer {token}"}
+worker.py:83: claim_token = claim["claim_token"]
+worker.py:100: f"/api/v1/tasks/{task_id}/heartbeat", json={"claim_token": claim_token}
+worker.py:120: {"claim_token": claim_token, "output": output},
+worker.py:139: if not isinstance(data, dict) or not data.get("agent_id") or not data.get("token"):
+worker.py:141: return {"agent_id": str(data["agent_id"]), "token": str(data["token"])}
+worker.py:154: if args.token:
+worker.py:156: raise SystemExit("--agent-id is required when --token is supplied")
+worker.py:157: credentials = {"agent_id": args.agent_id, "token": args.token}
+worker.py:168: credentials = {"agent_id": data["agent_id"], "token": data["token"]}
+worker.py:175: credentials["token"],
+worker.py:189: worker.add_argument("--agent-id", default=None, help="existing agent identity used with --token")
+worker.py:190: worker.add_argument("--token", default=None, help="existing agent token (prefer --credentials for persistence)")
+worker.py:191: worker.add_argument("--credentials", type=Path, default=None, help="JSON file containing agent_id and token")
