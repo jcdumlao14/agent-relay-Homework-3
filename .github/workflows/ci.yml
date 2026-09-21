@@ -47,7 +47,7 @@ jobs:
 
       - name: Run tests
         env:
-          RELAY_DATABASE_URL: postgresql+psycopg://agent_relay:agent_relay@127.0.0.1:5432/agent_relay
+          DATABASE_URL: postgresql+psycopg://agent_relay:agent_relay@127.0.0.1:5432/agent_relay
         run: uv run pytest -v
 
   docker:
