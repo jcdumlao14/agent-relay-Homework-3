@@ -68,7 +68,7 @@ agent-relay/
 |-- test_agent_relay.py
 |-- SPEC.md
 |-- README.md
-`-- update-agent-relay-vscode-auto-replace.ps1
+
 ```
 
 ## Technology Stack
