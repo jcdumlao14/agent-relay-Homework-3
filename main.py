@@ -21,6 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
+from observability import configure_observability
 
 from database import (
     DEFAULT_PAGE_SIZE,
@@ -116,6 +117,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Agent Relay", version="0.1.0", lifespan=lifespan)
+configure_observability(app)
 # ASGI transports used by small scripts do not always run lifespan handlers;
 # initialize the schema at import as well as during normal application startup.
 init_db()
