@@ -1,0 +1,14 @@
+{
+    "timestamp_utc":  "2026-09-24T04:00:05Z",
+    "semgrep":  {
+                    "command":  "semgrep scan --config=auto --json --output=security-audit/runs/semgrep-results.json .",
+                    "version":  "1.178.0",
+                    "available":  true
+                },
+    "snyk_agent_scan":  {
+                            "availability_check":  "uvx snyk-agent-scan@latest --help",
+                            "help_available":  true,
+                            "scan_executed":  false,
+                            "result":  "Availability/help check completed; no Snyk Agent Scan execution result was recorded."
+                        }
+}

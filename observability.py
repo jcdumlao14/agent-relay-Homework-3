@@ -1,4 +1,5 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+from opentelemetry.trace import StatusCode
 
 import json
 import logging
@@ -70,18 +71,54 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging() -> None:
-    """Configure application-wide structured JSON logging."""
+    """Configure structured JSON logging and optional OTLP log export."""
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
 
     root = logging.getLogger()
-
-    # Avoid duplicate handlers if the application is initialized more
-    # than once during tests or development.
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(logging.INFO)
+
+    if not OTEL_ENABLED:
+        return
+
+    resource = Resource.create(
+        {
+            "service.name": SERVICE_NAME,
+            "service.version": SERVICE_VERSION,
+        }
+    )
+
+    from opentelemetry._logs import set_logger_provider
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import (
+        OTLPLogExporter,
+    )
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+
+    log_provider = LoggerProvider(resource=resource)
+
+    exporter = OTLPLogExporter(
+        endpoint=(
+            f"{OTEL_EXPORTER_OTLP_ENDPOINT.rstrip('/')}"
+            "/v1/logs"
+        )
+    )
+
+    log_provider.add_log_record_processor(
+        BatchLogRecordProcessor(exporter)
+    )
+
+    set_logger_provider(log_provider)
+
+    otlp_handler = LoggingHandler(
+        level=logging.NOTSET,
+        logger_provider=log_provider,
+    )
+
+    root.addHandler(otlp_handler)
 
 
 def configure_tracing() -> None:
@@ -276,6 +313,14 @@ def configure_observability(app: FastAPI) -> None:
                             "http_method": request.method,
                             "http_route": route_path,
                         },
+                    )
+
+                    span.set_attribute(
+                        "error.type",
+                        "claim_endpoint_5xx",
+                    )
+                    span.set_status(
+                        StatusCode.ERROR,
                     )
 
                 logger.info(

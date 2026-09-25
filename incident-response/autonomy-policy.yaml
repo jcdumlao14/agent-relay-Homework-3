@@ -1,0 +1,71 @@
+﻿version: "1.0"
+
+policy:
+  name: "agent-relay-incident-autonomy"
+  principle: "Model reasoning does not grant execution authority."
+
+levels:
+
+  read_only:
+    description: "Collect and analyze bounded evidence only."
+    allowed_actions:
+      - observe
+      - verify
+      - summarize
+      - recommend
+    requires_human_approval: false
+    mutation_allowed: false
+
+  proposed:
+    description: "Produce a structured action proposal without executing it."
+    allowed_actions:
+      - observe
+      - verify
+      - summarize
+      - recommend
+      - propose_rollback
+    requires_human_approval: true
+    mutation_allowed: false
+
+  approved:
+    description: "Execute only explicitly allowlisted recovery actions after human approval."
+    allowed_actions:
+      - observe
+      - verify
+      - rollback
+    requires_human_approval: true
+    mutation_allowed: true
+
+defaults:
+  incident_response_level: "read_only"
+
+authorization:
+  confidence_is_not_permission: true
+  human_approval_required_for_mutation: true
+  approval_token_required_for_mutation: true
+
+allowlist:
+  read_only:
+    - GET /health
+    - GET /ready
+    - GET /api/v1/alerts
+    - GET /api/v1/rules
+    - GET /api/v1/query
+    - GET /api/v1/query_range
+    - GET /api/search
+
+  mutation:
+    - rollback
+
+denylist:
+  - task_creation
+  - task_claim
+  - task_completion
+  - task_failure
+  - agent_registration
+  - credential_rotation
+  - arbitrary_shell
+  - arbitrary_http
+  - database_write
+  - database_delete
+  - database_schema_change

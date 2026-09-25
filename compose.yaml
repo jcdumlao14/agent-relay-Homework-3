@@ -23,12 +23,24 @@ services:
     container_name: agent-relay-q4
     environment:
       RELAY_DATABASE_URL: postgresql+psycopg://agent_relay:agent_relay@postgres:5432/agent_relay
+      OTEL_ENABLED: "true"
+      OTEL_SERVICE_NAME: "agent-relay"
+      OTEL_SERVICE_VERSION: "0.1.0"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "8003:8000"
     restart: unless-stopped
+    networks:
+      - default
+      - observability
 
 volumes:
   agent-relay-postgres-data:
+
+networks:
+  observability:
+    external: true
+    name: observability_default

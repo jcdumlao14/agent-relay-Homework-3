@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Relay Security Finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "finding_id",
+    "severity",
+    "category",
+    "title",
+    "description",
+    "evidence",
+    "deterministic_check",
+    "model_review",
+    "human_validation",
+    "disposition"
+  ],
+  "properties": {
+    "finding_id": {
+      "type": "string",
+      "pattern": "^SEC-[0-9]{3}$"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "credentials",
+        "authorization",
+        "network",
+        "input_validation",
+        "logging",
+        "agent_capability",
+        "provenance",
+        "dependency",
+        "deployment",
+        "other"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "deterministic_check": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_review": {
+      "type": "string",
+      "minLength": 1
+    },
+    "human_validation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "disposition": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "remediated",
+        "mitigated",
+        "false_positive",
+        "deferred",
+        "escalated"
+      ]
+    }
+  }
+}

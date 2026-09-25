@@ -168,7 +168,7 @@ async def worker_command(args: argparse.Namespace) -> None:
             credentials = {"agent_id": data["agent_id"], "token": data["token"]}
             if args.credentials:
                 save_credentials(args.credentials, credentials)
-                LOGGER.info("saved credentials for %s to %s", credentials["agent_id"], args.credentials)
+                LOGGER.info("worker configuration saved for agent %s", credentials["agent_id"])
     await run_worker(
         args.base_url,
         credentials["agent_id"],

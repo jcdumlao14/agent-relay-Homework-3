@@ -1,0 +1,16 @@
+﻿groups:
+  - name: agent-relay-user-impact
+    interval: 5s
+    rules:
+      - alert: AgentRelayClaimFailures
+        expr: |
+          increase(agent_relay_claim_errors_total[2m]) > 0
+        for: 30s
+        labels:
+          severity: critical
+          service: agent-relay
+          impact: user
+        annotations:
+          summary: "Agent Relay task claiming is failing"
+          description: "The task claim endpoint returned one or more 5xx responses during the last two minutes. Workers may be unable to claim tasks."
+          runbook: "incident-response/runbooks/rollback.sh"

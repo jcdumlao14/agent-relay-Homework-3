@@ -1,0 +1,21 @@
+{
+  "incident_id": "INC-20260924-CLAIM-001",
+  "incident_type": "task_claim_failure",
+  "service": "agent-relay",
+  "service_version": "0.1.0",
+  "observed_route": "POST /api/v1/tasks/claim",
+  "observed_impact": "Workers may be unable to claim tasks.",
+  "alert_name": "AgentRelayClaimFailures",
+  "alert_severity": "critical",
+  "impact_classification": "user",
+  "collection_mode": "read_only",
+  "collector_version": "1.0",
+  "evidence_sources": [
+    "Agent Relay /health",
+    "Agent Relay /ready",
+    "Prometheus /api/v1/alerts",
+    "Prometheus /api/v1/rules",
+    "Prometheus /api/v1/query"
+  ],
+  "credentials_included": false
+}
