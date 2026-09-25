@@ -1,336 +1,911 @@
-# Agent Relay - Homework 3
+# Homework 4: DevOps and Observability for AI-Built Apps
+
+**Project:** Agent Relay
+**Course:** DataTalksClub AI Dev Tools Zoomcamp 2026
+**Homework:** 4 — DevOps and Observability for AI-Built Apps
+**Branch:** `homework-4`
+**Final commit:** `716e77b` — `Complete HW4 security observability and incident response`
+
+---
 
 ## Overview
 
-Agent Relay is a FastAPI task relay service for registering worker agents, queuing tasks, leasing work, tracking attempts, and recovering expired leases. Homework 3 extends the application with PostgreSQL, Docker, Kubernetes, and GitHub Actions CI/CD.
+Homework 4 extends the Agent Relay application from Homework 3 with an operational and security layer for detecting, investigating, responding to, and auditing production incidents.
 
-## Homework 3 Questions
-
-| Question | Answer |
-|---|---|
-| Q1 | Agents claim tasks from a DB through an HTTP API. |
-| Q2 | `completed` |
-| Q3 | `-p` |
-| Q4 | `postgres` |
-| Q5 | Deployment |
-| Q6 | Keep the existing version running and stop the deployment. |
-
-## Architecture
+The implementation follows the complete incident-response loop:
 
 ```text
-GitHub Actions
-      |
-      +-- Python Tests
-      |
-      +-- Docker Build
-      |
-      +-- Kubernetes Validation
-                |
-        +-------+-------+
-        |               |
-   Agent Relay      PostgreSQL
-   FastAPI API       Database
-        |
-    Worker Agents
+change
+  ↓
+observe user impact
+  ↓
+alert with context
+  ↓
+collect bounded evidence
+  ↓
+investigate with a read-only responder
+  ↓
+apply an explicit autonomy policy
+  ↓
+authorize or escalate a bounded response
+  ↓
+verify recovery
+  ↓
+audit the code and response trail
 ```
 
-Agents interact with persistent task state through the HTTP API. PostgreSQL stores agents, tasks, and attempts when `DATABASE_URL` points to PostgreSQL.
+The responder is intentionally **read-only by default**. Model confidence is treated as information rather than authorization. Any mutating recovery action must be explicitly allowlisted and approved outside the model.
 
-## Complete Project Structure
+---
+
+# Homework Questions
+
+## Question 1 — Instrumentation
+
+### Correct answer
+
+**Metrics, logs, and traces**
+
+The Agent Relay application was instrumented with OpenTelemetry-compatible telemetry covering the three core observability signals:
+
+* **Metrics** — request counts, errors, latency, and application-level operational measurements
+* **Logs** — structured application events suitable for incident investigation
+* **Traces** — request-level traces connecting application activity across the telemetry pipeline
+
+The implementation also avoids exposing credentials or sensitive authentication material through application logs.
+
+The main application instrumentation is implemented in:
 
 ```text
-agent-relay/
-|-- .github/
-|   `-- workflows/
-|       `-- ci.yml
-|-- k8s/
-|   |-- namespace.yaml
-|   |-- postgres-secret.yaml
-|   |-- postgres-pvc.yaml
-|   |-- postgres-deployment.yaml
-|   |-- postgres-service.yaml
-|   |-- agent-relay-deployment.yaml
-|   `-- agent-relay-service.yaml
-|-- q2/
-|-- .gitignore
-|-- Dockerfile
-|-- compose.yaml
-|-- pyproject.toml
-|-- uv.lock
-|-- main.py
-|-- database.py
-|-- storage.py
-|-- schemas.py
-|-- errors.py
-|-- worker.py
-|-- dashboard.py
-|-- dashboard.html
-|-- test_agent_relay.py
-|-- SPEC.md
-|-- README.md
-`-- update-agent-relay-vscode-auto-replace.ps1
+observability.py
 ```
 
-## Technology Stack
+---
 
-- Python 3.11+
-- FastAPI
-- Uvicorn
-- SQLAlchemy
-- PostgreSQL 16
-- psycopg 3
-- Pydantic Settings
-- pytest
-- uv
-- Docker and Docker Compose
-- Kubernetes
-- Kind
-- kubectl
-- GitHub Actions
+# Question 2 — The Telemetry Pipeline
 
-## Local Setup in VS Code
+### Correct answer
 
-```powershell
-cd C:\Users\kambar\agent-relay
-uv sync
-uv run pytest -v
+**OpenTelemetry**
+
+The observability stack uses OpenTelemetry as the vendor-neutral instrumentation and collection layer.
+
+The implemented telemetry architecture is:
+
+```text
+                    ┌─────────────────┐
+                    │   Agent Relay   │
+                    │                 │
+                    │ Metrics         │
+                    │ Logs            │
+                    │ Traces          │
+                    └────────┬────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │ OpenTelemetry       │
+                  │ Collector           │
+                  └──────┬──────┬───────┘
+                         │      │
+              ┌──────────┘      └──────────┐
+              ▼                            ▼
+        ┌───────────┐                ┌───────────┐
+        │ Prometheus│                │   Tempo   │
+        │  Metrics  │                │   Traces  │
+        └───────────┘                └───────────┘
+              │                            │
+              └────────────┬───────────────┘
+                           ▼
+                     ┌───────────┐
+                     │  Grafana  │
+                     │  Observe  │
+                     └───────────┘
 ```
 
-## Run the API Locally
+Relevant configuration is located under:
 
-```powershell
-uv run uvicorn main:app --reload
+```text
+observability/
+├── collector.yaml
+├── prometheus.yaml
+├── tempo.yaml
+├── compose.yaml
+├── dashboard.json
+├── alerts.yaml
+└── grafana/
+    └── provisioning/
 ```
 
-Useful endpoints:
+---
+
+# Question 3 — Dashboards
+
+### Correct answer
+
+**Grafana**
+
+Grafana provides the unified operational view for the telemetry stack.
+
+The project includes a Grafana dashboard configuration:
+
+```text
+observability/dashboard.json
+```
+
+Grafana is used to correlate operational signals rather than relying on a single infrastructure metric such as CPU utilization.
+
+---
+
+# Question 4 — Alerts
+
+### Correct answer
+
+**Real user impact, with context to start investigating**
+
+The implementation includes an application-level alert for Agent Relay claim failures.
+
+The alert focuses on the actual user-facing operation:
+
+```text
+POST /api/v1/tasks/claim
+```
+
+rather than using a generic infrastructure threshold such as CPU utilization.
+
+The alert configuration is stored in:
+
+```text
+observability/alerts.yaml
+```
+
+The incident used for the Homework 4 evidence packet is:
+
+```text
+INC-20260924-CLAIM-001
+```
+
+The corresponding alert is:
+
+```text
+AgentRelayClaimFailures
+```
+
+with:
+
+```text
+severity: critical
+impact classification: user
+```
+
+The incident metadata identifies the affected route as:
+
+```text
+POST /api/v1/tasks/claim
+```
+
+---
+
+# Question 5 — Evidence First
+
+### Correct answer
+
+**With read-only, allowlisted queries**
+
+The responder does not receive general production credentials.
+
+Evidence collection is bounded to explicitly allowlisted read-only sources.
+
+The collection process can inspect:
 
 ```text
 GET /health
 GET /ready
-GET /dashboard
+GET /api/v1/alerts
+GET /api/v1/rules
+GET /api/v1/query
+GET /api/v1/query_range
+GET /api/search
 ```
 
-## PostgreSQL with Docker Compose
+The evidence collector is:
 
-Build the application image:
+```text
+incident-response/collect-evidence.sh
+```
+
+The incident evidence packet is stored under:
+
+```text
+incident-response/incidents/INC-20260924-CLAIM-001/
+```
+
+It contains:
+
+```text
+claim-failure-increase.json
+claim-failures.json
+health.json
+http-requests.json
+metadata.json
+prometheus-alerts.json
+prometheus-rules.json
+ready.json
+```
+
+The collection mode recorded in the incident metadata is:
+
+```text
+read_only
+```
+
+and:
+
+```text
+credentials_included: false
+```
+
+This creates a bounded evidence boundary before the model is involved.
+
+---
+
+# Question 6 — The Agent Responder
+
+### Correct answer
+
+**The autonomy policy and allowlists — code outside the model**
+
+The responder operates as a read-only first responder.
+
+Its responsibilities are limited to:
+
+1. Inspecting the supplied evidence
+2. Identifying observed symptoms
+3. Identifying plausible causes
+4. Recommending an action
+5. Requesting escalation when necessary
+
+The responder must not independently:
+
+* modify the database
+* claim tasks
+* complete tasks
+* fail tasks
+* register agents
+* execute arbitrary shell commands
+* execute arbitrary HTTP mutations
+* rotate credentials
+* use credentials supplied inside evidence
+* perform a recovery action merely because its confidence is high
+
+The responder specification is:
+
+```text
+incident-response/responder-task.md
+```
+
+The structured response schema is:
+
+```text
+incident-response/response.schema.json
+```
+
+---
+
+# Autonomy and Authorization
+
+The autonomy policy is defined in:
+
+```text
+incident-response/autonomy-policy.yaml
+```
+
+Three operational levels are defined.
+
+### Read-only
+
+Allowed:
+
+```text
+observe
+verify
+summarize
+recommend
+```
+
+Mutation:
+
+```text
+not allowed
+```
+
+Human approval:
+
+```text
+not required
+```
+
+### Proposed
+
+Allowed:
+
+```text
+observe
+verify
+summarize
+recommend
+propose_rollback
+```
+
+Mutation:
+
+```text
+not allowed
+```
+
+Human approval:
+
+```text
+required for proposed mutation
+```
+
+### Approved
+
+Allowed:
+
+```text
+observe
+verify
+rollback
+```
+
+Mutation:
+
+```text
+allowed only for explicitly allowlisted recovery actions
+```
+
+Human approval:
+
+```text
+required
+```
+
+The central authorization rule is:
+
+```text
+Model confidence is not permission.
+```
+
+A high confidence score does not grant the model authority to perform a mutation.
+
+---
+
+# Question 7 — Security Audit
+
+### Correct answer
+
+**Semgrep**
+
+A deterministic Semgrep security scan was performed as part of the security audit.
+
+The initial audit identified security issues including:
+
+* mutable GitHub Actions references
+* container execution as root
+* Kubernetes security-context weaknesses
+* privilege escalation configuration
+* dependency freshness/cooldown concerns
+* potential credential disclosure through worker logging
+
+These findings were addressed.
+
+The final Semgrep scan produced:
+
+```text
+Findings: 0
+Rules run: 350
+Targets scanned: 65
+Parsed lines: ~100%
+Results: 0
+Errors: 0
+```
+
+The final scan artifact is:
+
+```text
+security-audit/runs/semgrep-results-final.json
+```
+
+The original audit result is intentionally preserved as:
+
+```text
+security-audit/runs/semgrep-results.json
+```
+
+The security audit documentation is located in:
+
+```text
+security-audit/
+├── audit-brief.md
+├── capability-table.md
+├── findings.schema.json
+└── runs/
+    ├── provenance.json
+    ├── scanner-provenance.json
+    ├── semgrep-results.json
+    └── semgrep-results-final.json
+```
+
+> The Semgrep result represents the executed Semgrep OSS scan. It should not be interpreted as coverage from unavailable Semgrep Pro rules.
+
+---
+
+# Security Hardening
+
+The Docker image was hardened to run the application as an unprivileged user.
+
+The final Docker configuration uses:
+
+```text
+USER 1000:1000
+```
+
+Runtime verification confirmed:
+
+```text
+uid=1000(appuser)
+gid=1000(appuser)
+groups=1000(appuser)
+```
+
+The Kubernetes Agent Relay deployment uses:
+
+```yaml
+runAsNonRoot: true
+seccompProfile:
+  type: RuntimeDefault
+```
+
+and the container uses:
+
+```yaml
+allowPrivilegeEscalation: false
+capabilities:
+  drop:
+    - ALL
+```
+
+PostgreSQL was also configured with a non-root security context and restricted capabilities.
+
+---
+
+# GitHub Actions Security
+
+GitHub Actions dependencies were changed from mutable version references to full commit SHA references.
+
+The pinned actions include:
+
+```text
+actions/checkout
+actions/setup-python
+astral-sh/setup-uv
+helm/kind-action
+```
+
+Full commit SHA pinning makes workflow dependencies deterministic and reduces the risk associated with mutable action references.
+
+---
+
+# Dependency Reproducibility
+
+The project uses `uv` for Python dependency management.
+
+The project configuration includes a dependency freshness constraint:
+
+```toml
+[tool.uv]
+package = false
+exclude-newer = "7 days"
+```
+
+The lock file was regenerated and validated.
+
+The following verification passed:
+
+```text
+uv lock --check
+```
+
+---
+
+# Incident: INC-20260924-CLAIM-001
+
+## Incident type
+
+```text
+task_claim_failure
+```
+
+## Service
+
+```text
+agent-relay
+```
+
+## Affected operation
+
+```text
+POST /api/v1/tasks/claim
+```
+
+## Impact
+
+Workers may be unable to claim tasks.
+
+The alert associated with the incident was:
+
+```text
+AgentRelayClaimFailures
+```
+
+with critical severity.
+
+---
+
+## Evidence
+
+The incident packet contains evidence from:
+
+```text
+Agent Relay /health
+Agent Relay /ready
+Prometheus /api/v1/alerts
+Prometheus /api/v1/rules
+Prometheus /api/v1/query
+```
+
+The observed claim-error metric initially reported:
+
+```text
+agent_relay_claim_errors_total = 2
+```
+
+A subsequent increase query reported:
+
+```text
+increase = 0
+```
+
+This evidence indicates that the observed claim-error count was not continuing to increase during the later verification period.
+
+---
+
+# Recovery Runbooks
+
+The incident-response package includes bounded recovery runbooks:
+
+```text
+incident-response/runbooks/rollback.sh
+incident-response/runbooks/verify-recovery.sh
+```
+
+Rollback is not automatically authorized merely because the responder recommends it.
+
+The authorization chain is:
+
+```text
+Responder recommendation
+        ↓
+Autonomy policy
+        ↓
+Allowlist check
+        ↓
+Human approval
+        ↓
+Approval token
+        ↓
+Bounded runbook execution
+        ↓
+Independent recovery verification
+```
+
+If the required authorization is unavailable, the responder stops at recommendation/escalation.
+
+---
+
+# Agent Capability Inventory
+
+The responder capability table is maintained in:
+
+```text
+security-audit/capability-table.md
+```
+
+Read-only capabilities include:
+
+```text
+Read health
+Read readiness
+Read Prometheus alerts
+Read Prometheus rules
+Read Prometheus metrics
+Read Tempo evidence
+Summarize incident
+Recommend recovery
+```
+
+Mutating or privileged capabilities remain restricted.
+
+The following operations are explicitly denied to the responder:
+
+```text
+Create task
+Claim task
+Complete task
+Fail task
+Register agent
+Modify database
+Delete database data
+Database schema changes
+Arbitrary shell execution
+Arbitrary HTTP mutation
+Credential rotation
+```
+
+---
+
+# Docker and Kubernetes Verification
+
+The final Docker image was built as:
+
+```text
+agent-relay:q4
+```
+
+The image was tested for:
+
+* successful build
+* non-root execution
+* application health
+* application readiness
+
+The resulting application responded successfully to:
+
+```text
+/health
+/ready
+```
+
+with:
+
+```json
+{"status":"ok"}
+```
+
+and:
+
+```json
+{"status":"ready"}
+```
+
+The Kubernetes deployment was also verified with Agent Relay and PostgreSQL pods running successfully.
+
+---
+
+# Testing
+
+The application test suite passed:
+
+```text
+4 passed
+```
+
+The test command was:
+
+```powershell
+pytest -q
+```
+
+The suite produced one Starlette/httpx deprecation warning, but no test failures.
+
+---
+
+# Repository Structure
+
+The main Homework 4 additions are organized as follows:
+
+```text
+agent-relay/
+│
+├── incident-response/
+│   ├── autonomy-policy.yaml
+│   ├── collect-evidence.sh
+│   ├── responder-task.md
+│   ├── response.schema.json
+│   ├── incidents/
+│   │   └── INC-20260924-CLAIM-001/
+│   │       ├── claim-failure-increase.json
+│   │       ├── claim-failures.json
+│   │       ├── health.json
+│   │       ├── http-requests.json
+│   │       ├── metadata.json
+│   │       ├── prometheus-alerts.json
+│   │       ├── prometheus-rules.json
+│   │       └── ready.json
+│   └── runbooks/
+│       ├── rollback.sh
+│       └── verify-recovery.sh
+│
+├── observability/
+│   ├── alerts.yaml
+│   ├── collector.yaml
+│   ├── compose.yaml
+│   ├── dashboard.json
+│   ├── prometheus.yaml
+│   ├── tempo.yaml
+│   └── grafana/
+│       └── provisioning/
+│
+├── security-audit/
+│   ├── audit-brief.md
+│   ├── capability-table.md
+│   ├── findings.schema.json
+│   └── runs/
+│       ├── provenance.json
+│       ├── scanner-provenance.json
+│       ├── semgrep-results.json
+│       └── semgrep-results-final.json
+│
+├── observability.py
+├── Dockerfile
+├── compose.yaml
+├── k8s/
+├── worker.py
+├── pyproject.toml
+└── uv.lock
+```
+
+---
+
+# Reproducibility
+
+## Run tests
+
+```powershell
+pytest -q
+```
+
+## Validate the dependency lock
+
+```powershell
+uv lock --check
+```
+
+## Build the Docker image
 
 ```powershell
 docker build -t agent-relay:q4 .
 ```
 
-Start the stack:
+## Check the image user
 
 ```powershell
-docker compose up -d
-docker compose ps
+docker image inspect agent-relay:q4 --format '{{.Config.User}}'
 ```
 
-Check the API:
-
-```powershell
-curl.exe http://127.0.0.1:8003/health
-curl.exe http://127.0.0.1:8003/ready
-```
-
-Inspect PostgreSQL:
-
-```powershell
-docker compose exec postgres psql -U agent_relay -d agent_relay
-```
-
-Inside `psql`:
+Expected:
 
 ```text
-\dt
-\q
+1000:1000
 ```
 
-Stop the stack:
+## Run the security scan
 
 ```powershell
-docker compose down
+semgrep scan --config=auto --json --output=security-audit/runs/semgrep-results-final.json .
 ```
 
-## Docker
-
-The expected Homework 3 image tag is `agent-relay:q4`.
-
-```powershell
-docker build -t agent-relay:q4 .
-docker image inspect agent-relay:q4
-```
-
-## Kubernetes
-
-The Kubernetes manifests are stored in `k8s/`. Reuse the existing Kind cluster. Do not delete or recreate the working cluster.
-
-```powershell
-kubectl config current-context
-kind get clusters
-```
-
-Expected context:
-
-```text
-kind-agent-relay
-```
-
-Load the application image:
-
-```powershell
-kind load docker-image agent-relay:q4 --name agent-relay
-```
-
-Apply resources:
-
-```powershell
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/postgres-secret.yaml
-kubectl apply -f k8s/postgres-pvc.yaml
-kubectl apply -f k8s/postgres-deployment.yaml
-kubectl apply -f k8s/postgres-service.yaml
-kubectl apply -f k8s/agent-relay-deployment.yaml
-kubectl apply -f k8s/agent-relay-service.yaml
-```
-
-Check resources:
+## Inspect Kubernetes resources
 
 ```powershell
 kubectl get pods -n agent-relay
 kubectl get services -n agent-relay
-kubectl get pvc -n agent-relay
+kubectl get deployments -n agent-relay
 ```
 
-Wait for deployments:
+---
 
-```powershell
-kubectl wait --namespace agent-relay --for=condition=available deployment/postgres --timeout=180s
-kubectl wait --namespace agent-relay --for=condition=available deployment/agent-relay --timeout=180s
-```
+# Final Git State
 
-Forward the API:
-
-```powershell
-kubectl port-forward -n agent-relay service/agent-relay 8000:8000
-```
-
-In another VS Code terminal:
-
-```powershell
-curl.exe http://127.0.0.1:8000/health
-curl.exe http://127.0.0.1:8000/ready
-```
-
-## CI/CD
-
-Workflow file: `.github/workflows/ci.yml`
-
-The workflow runs on pushes to `main` and pull requests targeting `main`.
-
-### Python Tests
-
-- Checkout repository
-- Install Python 3.11
-- Install uv
-- Run `uv sync --frozen`
-- Start PostgreSQL 16 as a service container
-- Set `DATABASE_URL`
-- Run `uv run pytest -v`
-
-### Docker Build
-
-Builds and verifies `agent-relay:q4`.
-
-### Kubernetes Validation
-
-Creates a temporary Kind cluster, builds and loads `agent-relay:q4`, validates the manifests, deploys PostgreSQL and Agent Relay, waits for both deployments, checks resources, and verifies `/health` and `/ready`.
-
-The jobs run in order: Docker waits for Python Tests, and Kubernetes waits for Docker Build.
-
-## Environment Configuration
-
-The application database configuration uses `DATABASE_URL`.
-
-Example PostgreSQL connection string:
+Homework 4 was committed and pushed to the dedicated branch:
 
 ```text
-postgresql+psycopg://agent_relay:agent_relay@127.0.0.1:5432/agent_relay
+Branch:
+homework-4
 ```
 
-Do not commit credentials or `.env` files.
+Final commit:
 
-## Testing
-
-Run all tests:
-
-```powershell
-uv run pytest -v
+```text
+716e77b Complete HW4 security observability and incident response
 ```
 
-Run the main test file:
+The final verification confirmed:
 
-```powershell
-uv run pytest test_agent_relay.py -v
+```text
+## homework-4...origin/homework-4
 ```
 
-## Git Workflow
+with no ahead/behind indicator.
 
-```powershell
-git status
-git diff
-git diff --check
-git log -1 --oneline
-git push origin main
+Therefore the local branch and GitHub branch are synchronized.
+
+---
+
+# Homework 4 Question Summary
+
+| Question | Topic              | Implemented Result                                |
+| -------- | ------------------ | ------------------------------------------------- |
+| Q1       | Instrumentation    | Metrics, logs, and traces                         |
+| Q2       | Telemetry pipeline | OpenTelemetry                                     |
+| Q3       | Dashboards         | Grafana                                           |
+| Q4       | Alerts             | Real user impact with investigation context       |
+| Q5       | Evidence           | Read-only, allowlisted queries                    |
+| Q6       | Agent responder    | Autonomy policy and allowlists                    |
+| Q7       | Security audit     | Semgrep                                           |
+| Q8       | Incident report    | Incident evidence and response artifacts prepared |
+
+---
+
+# Security Principle
+
+The central design principle of this implementation is:
+
+```text
+A model can recommend an action,
+but the model does not authorize the action.
 ```
 
-Repository: `https://github.com/jcdumlao14/agent-relay-Homework-3`
+Authorization is enforced outside the model through:
 
-## VS Code Automation Script
-
-`update-agent-relay-vscode-auto-replace.ps1` automatically backs up the existing README, replaces it with the clean Homework 3 README, validates it, runs tests, and commits and pushes the README when it changes.
-
-Run from the VS Code PowerShell terminal:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\update-agent-relay-vscode-auto-replace.ps1
+```text
+policy
++ allowlists
++ approval requirements
++ bounded runbooks
++ independent recovery verification
 ```
 
-The script creates `README.before-auto-replace.md` as a backup before replacing the README.
+This separates **reasoning** from **execution authority** and keeps the AI responder within a controlled operational boundary.
 
-## Homework 3 Completion
+---
 
-<span style="color:green">GREEN - Q1 Architecture - Complete</span>
+# Final Result
 
-<span style="color:green">GREEN - Q2 Testing - Complete</span>
+Homework 4 extends Agent Relay from a deployed application into an observable and auditable operational system.
 
-<span style="color:green">GREEN - Q3 Docker - Complete</span>
+The resulting workflow can:
 
-<span style="color:green">GREEN - Q4 PostgreSQL - Complete</span>
-
-<span style="color:green">GREEN - Q5 Kubernetes - Complete</span>
-
-<span style="color:green">GREEN - Q6 CI/CD - Complete</span>
-
-<span style="color:green">GREEN - Local Python tests passed</span>
-
-<span style="color:green">GREEN - Docker image built successfully</span>
-
-<span style="color:green">GREEN - PostgreSQL integration verified</span>
-
-<span style="color:green">GREEN - Kubernetes resources validated</span>
-
-<span style="color:green">GREEN - /health verified</span>
-
-<span style="color:green">GREEN - /ready verified</span>
-
-<span style="color:green">GREEN - GitHub Actions CI/CD passed</span>
-## Final Verification
-
-```powershell
-cd C:\Users\kambar\agent-relay
-uv run pytest -v
-git diff --check
-git status
-git log -1 --oneline
+```text
+detect
+  ↓
+measure user impact
+  ↓
+alert
+  ↓
+collect evidence
+  ↓
+investigate
+  ↓
+propose
+  ↓
+authorize or escalate
+  ↓
+recover
+  ↓
+verify
+  ↓
+audit
 ```
+
+The implementation demonstrates that AI-assisted incident response can be integrated into DevOps workflows while keeping credentials, authorization, mutation, and recovery controls outside the model.
